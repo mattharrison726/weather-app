@@ -31,3 +31,20 @@ Thumbs.db
 .cache/
 .parcel-cache/
 .eslintcache
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Local data and logs (generated at runtime)
+data/
+logs/
+
+# Local Claude planning and decisions
+.claude/
