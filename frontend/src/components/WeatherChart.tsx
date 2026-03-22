@@ -68,8 +68,8 @@ export function WeatherChart({ history }: Props) {
               borderRadius: "6px",
               color: "#f1f5f9",
             }}
-            formatter={(value: number, name: string) => [
-              `${value?.toFixed(1)}°C`,
+            formatter={(value, name) => [
+              typeof value === "number" ? `${value.toFixed(1)}°C` : "—",
               name === "temperature_c" ? "Temp" : "Feels like",
             ]}
           />
