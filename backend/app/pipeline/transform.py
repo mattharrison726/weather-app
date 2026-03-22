@@ -24,12 +24,12 @@ Data engineering principles:
 import json
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Optional
 
 from loguru import logger
 from pydantic import ValidationError
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
-from app.config import settings
 from app.db.engine import get_db_session
 from app.db.models.pipeline import DataQualityIssue, PipelineRun
 from app.db.models.raw import RawWeatherIngest
@@ -78,12 +78,17 @@ def _map_payload_to_candidate(raw_row: RawWeatherIngest) -> dict:
     }
 
 
-def process_unprocessed(pipeline_run_id: str) -> TransformResult:
+def process_unprocessed(
+    pipeline_run_id: str,
+    location_key: Optional[str] = None,
+) -> TransformResult:
     """Transform all unprocessed bronze rows into silver rows.
 
     Args:
         pipeline_run_id: The run_id of the current PipelineRun, used to
                          link DataQualityIssue records back to this run.
+        location_key: If provided, only process rows for this location.
+                      If None, process all unprocessed rows (any location).
 
     Returns:
         TransformResult with counts of transformed, failed, and duplicate rows.
@@ -93,12 +98,14 @@ def process_unprocessed(pipeline_run_id: str) -> TransformResult:
     # Fetch all unprocessed rows in one query.
     # The idx_raw_processed index makes this efficient even with large tables.
     with get_db_session() as session:
-        unprocessed = (
+        query = (
             session.query(RawWeatherIngest)
-            .filter_by(processed=False, location_key=settings.location_key)
+            .filter_by(processed=False)
             .order_by(RawWeatherIngest.fetched_for_timestamp)
-            .all()
         )
+        if location_key:
+            query = query.filter_by(location_key=location_key)
+        unprocessed = query.all()
 
     if not unprocessed:
         logger.info("Transform: no unprocessed raw rows found")

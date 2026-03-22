@@ -2,7 +2,7 @@
 Open-Meteo HTTP client.
 
 Responsibilities:
-  - Build the request URL from configured lat/lon
+  - Build the request URL from lat/lon
   - Make the HTTP GET request
   - Retry on transient failures (5xx, network errors) using tenacity
   - Return a typed result dict — NOT responsible for writing to the database
@@ -30,8 +30,6 @@ from tenacity import (
 )
 import logging
 
-from app.config import settings
-
 # Open-Meteo base URL
 _FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 
@@ -46,6 +44,19 @@ _CURRENT_FIELDS = ",".join([
     "wind_direction_10m",
     "is_day",
 ])
+
+
+@dataclass
+class LocationInfo:
+    """A location to fetch weather for.
+
+    Passed explicitly to fetch_weather() rather than reading from global settings,
+    so the client can be called for any location without mutating configuration.
+    """
+    location_key: str   # "{lat},{lon}" — matches DB convention
+    name: str
+    latitude: float
+    longitude: float
 
 
 def _is_retryable(exc: BaseException) -> bool:
@@ -78,28 +89,15 @@ class FetchResult:
     payload: dict          # full parsed JSON response
     fetched_at: datetime   # UTC timestamp of when we called the API
     data_timestamp: datetime  # UTC timestamp the weather data represents
+    location_key: str      # "{lat},{lon}" — propagated to bronze table
+    location_name: str     # human-readable name — for logging only
 
 
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=1, max=10),
-    retry=retry_if_exception(_is_retryable),
-    before_sleep=before_sleep_log(logging.getLogger("tenacity"), logging.WARNING),
-    reraise=True,
-)
-def fetch_weather() -> FetchResult:
-    """Fetch current weather conditions from Open-Meteo.
-
-    Returns a FetchResult with the full API response payload.
-    Raises httpx.HTTPStatusError on non-retryable HTTP errors.
-    Raises httpx.RequestError (after 3 attempts) on network failures.
-
-    The @retry decorator handles up to 3 attempts with exponential backoff
-    (1s, 2s, 4s wait between attempts) for transient errors only.
-    """
+def _do_fetch(location: LocationInfo) -> FetchResult:
+    """Inner fetch function (decorated separately so retry wraps correctly)."""
     params = {
-        "latitude": settings.weather_latitude,
-        "longitude": settings.weather_longitude,
+        "latitude": location.latitude,
+        "longitude": location.longitude,
         "current": _CURRENT_FIELDS,
         "timezone": "UTC",
         "forecast_days": 1,
@@ -107,7 +105,7 @@ def fetch_weather() -> FetchResult:
 
     fetched_at = datetime.now(timezone.utc).replace(tzinfo=None)  # store as naive UTC
 
-    logger.debug(f"Fetching weather from Open-Meteo for {settings.weather_location_name}")
+    logger.debug(f"Fetching weather from Open-Meteo for {location.name}")
 
     with httpx.Client(timeout=httpx.Timeout(5.0, read=30.0)) as client:
         response = client.get(_FORECAST_URL, params=params)
@@ -125,7 +123,7 @@ def fetch_weather() -> FetchResult:
     data_timestamp = datetime.fromisoformat(raw_time).replace(tzinfo=None)
 
     logger.info(
-        f"Fetched weather for {settings.weather_location_name} "
+        f"Fetched weather for {location.name} "
         f"at data_timestamp={data_timestamp.isoformat()}"
     )
 
@@ -135,4 +133,43 @@ def fetch_weather() -> FetchResult:
         payload=payload,
         fetched_at=fetched_at,
         data_timestamp=data_timestamp,
+        location_key=location.location_key,
+        location_name=location.name,
+    )
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_exception(_is_retryable),
+    before_sleep=before_sleep_log(logging.getLogger("tenacity"), logging.WARNING),
+    reraise=True,
+)
+def fetch_weather(location: LocationInfo) -> FetchResult:
+    """Fetch current weather conditions from Open-Meteo for a given location.
+
+    Args:
+        location: The LocationInfo specifying which lat/lon to fetch.
+
+    Returns a FetchResult with the full API response payload.
+    Raises httpx.HTTPStatusError on non-retryable HTTP errors.
+    Raises httpx.RequestError (after 3 attempts) on network failures.
+
+    The @retry decorator handles up to 3 attempts with exponential backoff
+    (1s, 2s, 4s wait between attempts) for transient errors only.
+    """
+    return _do_fetch(location)
+
+
+def make_location_info_from_settings() -> LocationInfo:
+    """Build a LocationInfo from the app's .env settings.
+
+    Used as the fallback/default location when no explicit location is given.
+    """
+    from app.config import settings
+    return LocationInfo(
+        location_key=settings.location_key,
+        name=settings.weather_location_name,
+        latitude=settings.weather_latitude,
+        longitude=settings.weather_longitude,
     )

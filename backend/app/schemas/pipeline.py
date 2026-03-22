@@ -23,6 +23,7 @@ class PipelineRunResponse(BaseModel):
     run_id: str
     pipeline_name: str
     triggered_by: str
+    location_key: Optional[str]
     started_at: datetime
     completed_at: Optional[datetime]
     status: str

@@ -31,7 +31,10 @@ class PipelineRun(Base):
     # What triggered this run?
     triggered_by: Mapped[str] = mapped_column(
         String(50), nullable=False
-    )  # 'scheduler', 'manual', 'backfill', 'startup'
+    )  # 'scheduler', 'manual', 'backfill', 'startup', 'api'
+
+    # Which location did this run cover? Nullable for backward compat with existing rows.
+    location_key: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

@@ -1,7 +1,15 @@
 import type { CurrentWeather } from "../types/weather";
+import {
+  tempDisplay,
+  tempUnitLabel,
+  windDisplay,
+  precipDisplay,
+} from "../utils/units";
+import type { UnitSystem } from "../utils/units";
 
 interface Props {
   data: CurrentWeather;
+  units: UnitSystem;
 }
 
 /** Maps wind degrees to a compass direction label. */
@@ -11,7 +19,7 @@ function windDirection(deg: number | null): string {
   return dirs[Math.round(deg / 45) % 8];
 }
 
-export function CurrentWeatherCard({ data }: Props) {
+export function CurrentWeatherCard({ data, units }: Props) {
   const obs = data.observation;
   const isDay = obs.is_day ?? true;
 
@@ -28,8 +36,12 @@ export function CurrentWeatherCard({ data }: Props) {
         <div className="temperature">
           {obs.temperature_c !== null ? (
             <>
-              <span className="temp-value">{obs.temperature_c.toFixed(1)}</span>
-              <span className="temp-unit">°C</span>
+              <span className="temp-value">
+                {units === "imperial"
+                  ? ((obs.temperature_c * 9) / 5 + 32).toFixed(1)
+                  : obs.temperature_c.toFixed(1)}
+              </span>
+              <span className="temp-unit">{tempUnitLabel(units)}</span>
             </>
           ) : (
             <span className="temp-value">—</span>
@@ -39,7 +51,7 @@ export function CurrentWeatherCard({ data }: Props) {
           <div className="condition">{obs.weather_description ?? "Unknown"}</div>
           {obs.apparent_temperature_c !== null && (
             <div className="feels-like">
-              Feels like {obs.apparent_temperature_c.toFixed(1)}°C
+              Feels like {tempDisplay(obs.apparent_temperature_c, units)}
             </div>
           )}
           <div className="day-night">{isDay ? "Daytime" : "Night"}</div>
@@ -58,16 +70,14 @@ export function CurrentWeatherCard({ data }: Props) {
         <div className="detail">
           <span className="detail-label">Precipitation</span>
           <span className="detail-value">
-            {obs.precipitation_mm !== null
-              ? `${obs.precipitation_mm.toFixed(1)} mm`
-              : "—"}
+            {precipDisplay(obs.precipitation_mm, units)}
           </span>
         </div>
         <div className="detail">
           <span className="detail-label">Wind</span>
           <span className="detail-value">
             {obs.wind_speed_kmh !== null
-              ? `${obs.wind_speed_kmh.toFixed(1)} km/h ${windDirection(obs.wind_direction_deg)}`
+              ? `${windDisplay(obs.wind_speed_kmh, units)} ${windDirection(obs.wind_direction_deg)}`
               : "—"}
           </span>
         </div>

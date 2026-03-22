@@ -31,10 +31,14 @@ from app.config import settings
 
 
 def _run_scheduled_pipeline() -> None:
-    """Wrapper called by APScheduler — runs in a background thread."""
-    from app.pipeline.runner import run_pipeline
-    logger.info("Scheduler firing pipeline run")
-    run_pipeline(triggered_by="scheduler")
+    """Wrapper called by APScheduler — runs in a background thread.
+
+    Runs the pipeline for all favorited locations. Each location gets
+    its own pipeline_runs audit record.
+    """
+    from app.pipeline.runner import run_pipeline_for_favorites
+    logger.info("Scheduler firing pipeline run for all favorites")
+    run_pipeline_for_favorites(triggered_by="scheduler")
 
 
 def create_scheduler() -> BackgroundScheduler:

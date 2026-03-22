@@ -8,16 +8,18 @@ import {
   YAxis,
 } from "recharts";
 import type { WeatherObservation } from "../types/weather";
+import { tempValue, tempUnitLabel } from "../utils/units";
+import type { UnitSystem } from "../utils/units";
 
 interface Props {
   history: WeatherObservation[];
+  units: UnitSystem;
 }
 
 interface ChartPoint {
   time: string;
-  temperature_c: number | null;
-  apparent_temperature_c: number | null;
-  relative_humidity_pct: number | null;
+  temperature: number | null;
+  apparent_temperature: number | null;
 }
 
 function formatTime(isoString: string): string {
@@ -27,13 +29,14 @@ function formatTime(isoString: string): string {
   });
 }
 
-export function WeatherChart({ history }: Props) {
+export function WeatherChart({ history, units }: Props) {
+  const unitLabel = tempUnitLabel(units);
+
   // History arrives newest-first from the API; reverse for chronological chart
   const data: ChartPoint[] = [...history].reverse().map((obs) => ({
     time: formatTime(obs.observed_at),
-    temperature_c: obs.temperature_c,
-    apparent_temperature_c: obs.apparent_temperature_c,
-    relative_humidity_pct: obs.relative_humidity_pct,
+    temperature: tempValue(obs.temperature_c, units),
+    apparent_temperature: tempValue(obs.apparent_temperature_c, units),
   }));
 
   if (data.length === 0) {
@@ -58,7 +61,7 @@ export function WeatherChart({ history }: Props) {
           />
           <YAxis
             tick={{ fontSize: 11, fill: "#94a3b8" }}
-            tickFormatter={(v) => `${v}°`}
+            tickFormatter={(v) => `${v}${unitLabel}`}
             domain={["auto", "auto"]}
           />
           <Tooltip
@@ -69,26 +72,26 @@ export function WeatherChart({ history }: Props) {
               color: "#f1f5f9",
             }}
             formatter={(value, name) => [
-              typeof value === "number" ? `${value.toFixed(1)}°C` : "—",
-              name === "temperature_c" ? "Temp" : "Feels like",
+              typeof value === "number" ? `${value.toFixed(1)}${unitLabel}` : "—",
+              name === "temperature" ? "Temp" : "Feels like",
             ]}
           />
           <Line
             type="monotone"
-            dataKey="temperature_c"
+            dataKey="temperature"
             stroke="#38bdf8"
             strokeWidth={2}
             dot={false}
-            name="temperature_c"
+            name="temperature"
           />
           <Line
             type="monotone"
-            dataKey="apparent_temperature_c"
+            dataKey="apparent_temperature"
             stroke="#818cf8"
             strokeWidth={1.5}
             strokeDasharray="4 2"
             dot={false}
-            name="apparent_temperature_c"
+            name="apparent_temperature"
           />
         </LineChart>
       </ResponsiveContainer>

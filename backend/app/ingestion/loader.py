@@ -22,7 +22,6 @@ from dataclasses import dataclass
 from loguru import logger
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
-from app.config import settings
 from app.db.engine import get_db_session
 from app.db.models.raw import RawWeatherIngest
 from app.ingestion.client import FetchResult
@@ -46,9 +45,12 @@ def write_raw(fetch_result: FetchResult) -> LoadResult:
     enforce idempotency. If a row for this location + data_timestamp already
     exists, the insert is silently skipped.
 
+    The location_key is taken directly from fetch_result (set by the client),
+    so the loader doesn't need to read from global settings.
+
     Returns a LoadResult indicating whether this was a new row or a duplicate.
     """
-    location_key = settings.location_key
+    location_key = fetch_result.location_key
 
     row_data = {
         "location_key": location_key,

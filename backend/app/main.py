@@ -2,7 +2,7 @@
 FastAPI application entrypoint.
 
 The lifespan context manager handles startup and shutdown:
-  - Startup: configure logging, optionally start the scheduler
+  - Startup: configure logging, seed default location, optionally start the scheduler
   - Shutdown: gracefully stop the scheduler if it was running
 
 Run the server:
@@ -11,6 +11,7 @@ Run the server:
 """
 import sys
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,6 +20,7 @@ from loguru import logger
 from app.config import settings
 from app.api.routes import pipeline as pipeline_router
 from app.api.routes import weather as weather_router
+from app.api.routes import locations as locations_router
 
 
 def _configure_logging() -> None:
@@ -58,6 +60,49 @@ def _configure_logging() -> None:
     logger.info(f"Logging configured | level={settings.log_level} | file=logs/pipeline.log")
 
 
+def _seed_default_location() -> None:
+    """Ensure the .env location is in the favorites table on first startup.
+
+    This seeds the locations table so the app works out of the box with the
+    configured location. If the favorites table already has entries, this is
+    a no-op (won't add a duplicate).
+    """
+    from app.db.engine import get_db_session
+    from app.db.models.locations import Location
+
+    location_key = settings.location_key
+
+    with get_db_session() as session:
+        existing = session.get(Location, location_key)
+        if existing:
+            return  # Already seeded
+
+        # Try to match against catalog for proper country info
+        from app.locations.catalog import CATALOG_BY_KEY
+        city = CATALOG_BY_KEY.get(location_key)
+
+        if city:
+            name = city.name
+            country = city.country
+        else:
+            name = settings.weather_location_name
+            country = "Custom"
+
+        new_loc = Location(
+            location_key=location_key,
+            name=name,
+            country=country,
+            latitude=settings.weather_latitude,
+            longitude=settings.weather_longitude,
+            added_at=datetime.utcnow(),
+        )
+        session.add(new_loc)
+
+    logger.info(
+        f"Seeded default location: {name} ({location_key})"
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI lifespan — runs setup on startup, teardown on shutdown.
@@ -73,6 +118,9 @@ async def lifespan(app: FastAPI):
         f"location={settings.weather_location_name} "
         f"({settings.weather_latitude}, {settings.weather_longitude})"
     )
+
+    # Ensure the configured .env location is in the favorites table
+    _seed_default_location()
 
     scheduler = None
     if settings.scheduler_enabled:
@@ -104,7 +152,7 @@ app = FastAPI(
         "Data engineering weather app — ingests from Open-Meteo, "
         "stores in a local SQLite database, serves clean weather data."
     ),
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
@@ -126,6 +174,7 @@ app.add_middleware(
 # Routers
 app.include_router(weather_router.router)
 app.include_router(pipeline_router.router)
+app.include_router(locations_router.router)
 
 
 @app.get("/health")
