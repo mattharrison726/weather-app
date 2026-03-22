@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
 
+    # Scheduler — off by default for infrequent personal use.
+    # Set SCHEDULER_ENABLED=true to enable automatic background ingestion.
+    # SCHEDULER_INTERVAL_HOURS controls how often it runs (default: every 6 hours).
+    scheduler_enabled: bool = False
+    scheduler_interval_hours: int = 6
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     @property

@@ -5,7 +5,7 @@ This is the top-level coordinator. It:
   1. Creates a pipeline_runs audit record at the start (status='running')
   2. Calls Extract (client.fetch_weather)
   3. Calls Load (loader.write_raw)
-  4. Calls Transform (transform.process_unprocessed) — stub in Phase 2
+  4. Calls Transform (transform.process_unprocessed)
   5. Closes the audit record with final status, row counts, and duration
 
 Data engineering principle: the try/finally block guarantees the audit record
@@ -30,6 +30,7 @@ from app.db.engine import get_db_session
 from app.db.models.pipeline import PipelineRun
 from app.ingestion.client import fetch_weather
 from app.ingestion.loader import write_raw
+from app.pipeline.transform import process_unprocessed
 
 
 def run_pipeline(triggered_by: str = "manual") -> PipelineRun:
@@ -95,15 +96,12 @@ def run_pipeline(triggered_by: str = "manual") -> PipelineRun:
             )
 
         # ----------------------------------------------------------------
-        # TRANSFORM: raw → clean (implemented in Phase 3)
+        # TRANSFORM: raw → validated clean rows (silver layer)
         # ----------------------------------------------------------------
-        logger.info(f"[{run_id}] Step 3/3: Transform — (stub, implemented in Phase 3)")
-        # Phase 3 will call:
-        #   from app.pipeline.transform import process_unprocessed
-        #   transform_result = process_unprocessed(pipeline_run_id=run_id)
-        #   rows_transformed = transform_result.rows_transformed
-        #   rows_failed = transform_result.rows_failed
-        rows_transformed = 0
+        logger.info(f"[{run_id}] Step 3/3: Transform — validating and writing to silver table")
+        transform_result = process_unprocessed(pipeline_run_id=run_id)
+        rows_transformed = transform_result.rows_transformed
+        rows_failed = transform_result.rows_failed
 
         # Determine final status
         if rows_failed > 0 and rows_transformed > 0:
