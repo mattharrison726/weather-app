@@ -18,6 +18,7 @@ from loguru import logger
 
 from app.config import settings
 from app.api.routes import pipeline as pipeline_router
+from app.api.routes import weather as weather_router
 
 
 def _configure_logging() -> None:
@@ -123,6 +124,7 @@ app.add_middleware(
 )
 
 # Routers
+app.include_router(weather_router.router)
 app.include_router(pipeline_router.router)
 
 
